@@ -4,17 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Scramjet STATIC</title>
-
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500&display=swap"
-      rel="stylesheet"
-    />
-
-    <!-- bare-mux UMD — plain script, sets globalThis._0zzl94 synchronously -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500&display=swap" rel="stylesheet" />
     <script src="./bare-mux/bare-mux.js"></script>
-
     <style>
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
       html, body { height: 100%; background: #000; font-family: 'Roboto', sans-serif; color: #fff; }
@@ -47,19 +40,15 @@
     <script type="module">
       const status = document.getElementById('status')
       try {
-        // BASE = /Scramjet-static-demo-build/ on GitHub Pages, or / on custom domain
-        // Every single path passed to Scramjet, bare-mux, and SW registration
-        // must be prefixed with BASE so they resolve correctly on the subpath
+        // BASE = /Scramjet-static-demo-build/ on GitHub Pages, / on custom domain
         const BASE = new URL('./', document.baseURI).pathname
 
-        // Dynamic import guarantees scramjet.bundle.js fully executes
-        // before we call $scramjetLoadController()
+        // Dynamic import guarantees scramjet.js fully executes before we use its globals
         await import('./scramjet-engine/scramjet.js')
-
         const { ScramjetController } = $scramjetLoadController()
 
+        // Use BASE for prefix so SW routes match on GitHub Pages subpath
         const sj = new ScramjetController({
-          // prefix must include BASE so proxied URLs are under the correct subpath
           prefix: BASE + 'scramjet/',
           files: {
             wasm: BASE + 'scramjet-engine/scramjet.wasm',
@@ -68,13 +57,20 @@
           },
         })
 
+        // Register SW first
+        const reg = await navigator.serviceWorker.register(BASE + 'sw.js', { scope: BASE })
+
+        // Wait for SW to be active (handles first-install and updates)
+        await new Promise(resolve => {
+          if (reg.active) { resolve(); return }
+          const sw = reg.installing || reg.waiting
+          if (sw) sw.addEventListener('statechange', e => { if (e.target.state === 'activated') resolve() })
+        })
+
+        // NOW call init — this writes config to IDB and posts loadConfig to the active SW
         await sj.init()
 
-        // SW scope and script path both use BASE
-        await navigator.serviceWorker.register(BASE + 'sw.js', { scope: BASE })
-        await navigator.serviceWorker.ready
-
-        // bare-mux worker and transport paths also need BASE
+        // Set up transport AFTER SW is active and has config
         const conn = new _0zzl94._ak44v7(BASE + 'bare-mux/bare-mux-worker.js')
         await conn.setTransport(BASE + 'transport/libcurl.mjs', [{ wisp: 'wss://anura.pro/wisp/' }])
 
