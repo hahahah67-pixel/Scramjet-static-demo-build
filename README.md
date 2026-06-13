@@ -1,9 +1,10 @@
 # SCRAMJET - STATIC
 
-### Build 1.5 (First Official Release)
+### Build 1.5 (First Officialy Documentaied Release)
 **Created & Maintained by:** hahahah67-pixel
 
 ---
+align="center"><img src="https://raw.githubusercontent.com/MercuryWorkshop/scramjet/main/assets/scramjet.png" height="200"></p>
 
 ## 🚀 About the Project
 
