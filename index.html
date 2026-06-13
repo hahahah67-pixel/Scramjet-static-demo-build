@@ -24,9 +24,6 @@
       #status { margin-top: 1rem; font-size: 0.78rem; color: rgba(255,255,255,0.3); letter-spacing: 0.03em; min-height: 1.2em; text-align: center; }
       #browser { position: fixed; inset: 0; width: 100%; height: 100%; border: none; background: #111; z-index: 5; display: none; }
       #browser.visible { display: block; }
-      #home-btn { position: fixed; bottom: 1.2rem; left: 50%; transform: translateX(-50%); z-index: 20; background: rgba(0,0,0,0.7); border: 1px solid rgba(255,255,255,0.15); color: #fff; font-family: 'Roboto', sans-serif; font-size: 0.8rem; letter-spacing: 0.05em; padding: 0.45rem 1.1rem; border-radius: 999px; cursor: pointer; backdrop-filter: blur(8px); display: none; transition: background 0.15s; }
-      #home-btn.visible { display: block; }
-      #home-btn:hover { background: rgba(255,255,255,0.12); }
     </style>
   </head>
   <body>
@@ -49,23 +46,18 @@
       allow="autoplay; fullscreen"
     ></iframe>
 
-    <button id="home-btn">⌂ Home</button>
-
     <script type="module">
       const status  = document.getElementById('status')
       const home    = document.getElementById('home')
       const frame   = document.getElementById('browser')
-      const homeBtn = document.getElementById('home-btn')
       const bar     = document.getElementById('searchbar')
 
-      // Track whether we're currently browsing
       let browsing = false
 
       function showHome() {
         browsing = false
         home.classList.remove('hidden')
         frame.classList.remove('visible')
-        homeBtn.classList.remove('visible')
         bar.value = ''
       }
 
@@ -73,24 +65,14 @@
         frame.src = encodedUrl
         home.classList.add('hidden')
         frame.classList.add('visible')
-        homeBtn.classList.add('visible')
-
         if (!browsing) {
-          // First navigation into the browser — push a history entry so that
-          // pressing back returns here (to home) instead of leaving the site.
-          // We use state {home:true} to mark the home entry we'll detect below.
           history.pushState({ browsing: true }, '')
           browsing = true
         }
       }
 
-      // When the browser back button is pressed and we pop back to the home state,
-      // show the home screen instead of leaving the site.
-      window.addEventListener('popstate', (e) => {
-        if (browsing) {
-          // User pressed back while browsing — go home
-          showHome()
-        }
+      window.addEventListener('popstate', () => {
+        if (browsing) showHome()
       })
 
       function toUrl(raw) {
@@ -101,12 +83,6 @@
         if (/^[^\s]+\.[^\s]+$/.test(s)) return 'https://' + s
         return 'https://duckduckgo.com/?q=' + encodeURIComponent(s)
       }
-
-      homeBtn.addEventListener('click', () => {
-        // Home button — go back in outer history so state stays consistent
-        if (browsing) history.back()
-        else showHome()
-      })
 
       try {
         const BASE   = new URL('./', document.baseURI).pathname
