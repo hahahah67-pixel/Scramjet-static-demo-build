@@ -12,7 +12,7 @@
       rel="stylesheet"
     />
 
-    <!-- These two MUST be plain <script> tags (not modules) so they set globals before the module below runs -->
+    <!-- Must be plain <script> tags so globals are set before the module below runs -->
     <script src="./scramjet-engine/scramjet.js"></script>
     <script src="./bare-mux/bare-mux.js"></script>
 
@@ -67,6 +67,7 @@
       }
 
       .bar-wrap input::placeholder { color: rgba(255,255,255,0.38); }
+
       .bar-wrap input:focus {
         border-color: rgba(255,255,255,0.45);
         background: rgba(255,255,255,0.1);
@@ -127,56 +128,70 @@
     </div>
 
     <script type="module">
-      // Derive base path dynamically — works whether hosted at / or /Scramjet-static-demo-build/
-      const BASE = new URL('./', document.baseURI).pathname
+      const status = document.getElementById('status')
 
-      // ── 1. Scramjet controller ──────────────────────────────────────────
-      // prefix MUST be '/scramjet/' — this is patched into scramjet.js to match
-      const { _4efsla: ScramjetController } = _zx1lz2()
+      try {
+        // BASE handles GitHub Pages subpath automatically
+        // e.g. /Scramjet-static-demo-build/ on GitHub Pages, or / on a custom domain
+        const BASE = new URL('./', document.baseURI).pathname
 
-      const sj = new ScramjetController({
-        prefix: '/scramjet/',
-        files: {
-          wasm: '/scramjet-engine/scramjet.wasm',
-          all:  '/scramjet-engine/scramjet.js',
-          sync: '/scramjet-engine/scramjet-sync.js',
-        },
-      })
+        // ── 1. Scramjet Controller ────────────────────────────────────────
+        // Official API: $scramjetLoadController() returns { ScramjetController }
+        // This is set as a global by scramjet.js (scramjet.bundle.js)
+        const { ScramjetController } = $scramjetLoadController()
 
-      await sj.init()
+        const sj = new ScramjetController({
+          prefix: '/scramjet/',
+          files: {
+            wasm: '/scramjet-engine/scramjet.wasm',
+            all:  '/scramjet-engine/scramjet-all.js',
+            sync: '/scramjet-engine/scramjet-sync.js',
+          },
+        })
 
-      // ── 2. Service worker ───────────────────────────────────────────────
-      // Use BASE-relative registration so it works on GitHub Pages subpaths
-      await navigator.serviceWorker.register(BASE + 'sw.js', { scope: BASE })
-      await navigator.serviceWorker.ready
+        await sj.init()
 
-      // ── 3. Transport — libcurl over anura.pro (non-Cloudflare) ─────────
-      const WISP_URL = 'wss://anura.pro/wisp/'
+        // ── 2. Service Worker ─────────────────────────────────────────────
+        // scope + path must match BASE for GitHub Pages subpath hosting
+        await navigator.serviceWorker.register(BASE + 'sw.js', { scope: BASE })
+        await navigator.serviceWorker.ready
 
-      const conn = new _0zzl94._ak44v7(BASE + 'bare-mux/bare-mux-worker.js')
-      await conn.setTransport(BASE + 'transport/libcurl.mjs', [{ wisp: WISP_URL }])
+        // ── 3. Transport — libcurl over anura.pro (non-Cloudflare) ────────
+        const WISP_URL = 'wss://anura.pro/wisp/'
 
-      document.getElementById('status').textContent = 'Ready'
+        // _0zzl94._ak44v7 = WorkerConnection from bare-mux UMD build
+        // path MUST be absolute from root (bare-mux enforces this)
+        const conn = new _0zzl94._ak44v7('/bare-mux/bare-mux-worker.js')
+        await conn.setTransport('/transport/libcurl.mjs', [{ wisp: WISP_URL }])
 
-      // ── 4. Navigation ───────────────────────────────────────────────────
-      function navigate(raw) {
-        if (!raw.trim()) return
-        let url = raw.trim()
-        if (!/^https?:\/\//i.test(url)) {
-          if (/^[^\s]+\.[^\s]+$/.test(url)) {
-            url = 'https://' + url
-          } else {
-            url = 'https://www.google.com/search?q=' + encodeURIComponent(url)
+        status.textContent = 'Ready'
+
+        // ── 4. Navigation ─────────────────────────────────────────────────
+        function navigate(raw) {
+          if (!raw.trim()) return
+          let url = raw.trim()
+          if (!/^https?:\/\//i.test(url)) {
+            if (/^[^\s]+\.[^\s]+$/.test(url)) {
+              url = 'https://' + url
+            } else {
+              url = 'https://www.google.com/search?q=' + encodeURIComponent(url)
+            }
           }
+          window.location.href = sj.encodeUrl(url)
         }
-        window.location.href = sj.encodeUrl(url)
+
+        const bar = document.getElementById('searchbar')
+        const btn = document.getElementById('go-btn')
+
+        bar.addEventListener('keydown', e => { if (e.key === 'Enter') navigate(bar.value) })
+        btn.addEventListener('click', () => navigate(bar.value))
+
+      } catch (err) {
+        // Show error visibly — no more silent fails
+        status.style.color = '#f87171'
+        status.textContent = 'Error: ' + err.message
+        console.error('[Scramjet STATIC] init error:', err)
       }
-
-      const bar = document.getElementById('searchbar')
-      const btn = document.getElementById('go-btn')
-
-      bar.addEventListener('keydown', e => { if (e.key === 'Enter') navigate(bar.value) })
-      btn.addEventListener('click', () => navigate(bar.value))
     </script>
   </body>
 </html>
