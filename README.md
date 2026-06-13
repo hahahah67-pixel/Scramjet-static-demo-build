@@ -23,7 +23,9 @@ This static variant is built on Scramjet version 1.10 and utilizes the core engi
 
 ## File Structure
 
-└── Scramjet-static-demo-build-main
+repo File structure
+    
+    -└── Scramjet-static-demo-build-main
     └── .github
         ├── ISSUE_TEMPLATE
         │   ├── bug_report.md
@@ -48,7 +50,6 @@ This static variant is built on Scramjet version 1.10 and utilizes the core engi
     └── README.md
     └── sw.js
     
-    ---
     
 ## 📄 License & Legal
 
