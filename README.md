@@ -30,7 +30,7 @@ repo File structure
         ├── ISSUE_TEMPLATE
         │   ├── bug_report.md
         │   ├── config.yml
-        │   ├── Djdjdh.txt
+
         ├── workflows
         │   └── docker-image.yml
         │   └── eslint.yml
