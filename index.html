@@ -54,27 +54,13 @@
           },
         })
 
-        // ── Service Worker activation ─────────────────────────────────────
-        // This is the fix for the back-button hang.
-        //
-        // navigator.serviceWorker.controller is non-null when the SW is already
-        // active and controlling this page (e.g. back navigation, reload).
-        // In that case we skip the statechange wait entirely — it would never fire.
-        //
-        // On first ever load, controller is null and we wait for the SW to activate.
-        // On a SW update, waiting is also correct.
-
         const reg = await navigator.serviceWorker.register(BASE + 'sw.js', { scope: BASE })
 
         if (!navigator.serviceWorker.controller) {
-          // First load — SW is installing. Wait until it activates.
           await new Promise(resolve => {
-            // reg.active means it activated synchronously (rare but possible)
             if (reg.active && reg.active.state === 'activated') { resolve(); return }
-
             const candidate = reg.installing || reg.waiting || reg.active
             if (!candidate) { resolve(); return }
-
             candidate.addEventListener('statechange', function handler(e) {
               if (e.target.state === 'activated') {
                 candidate.removeEventListener('statechange', handler)
@@ -83,36 +69,35 @@
             })
           })
         }
-        // If controller already exists we fall straight through — SW is live.
 
-        // Write config to IDB and post loadConfig to the active SW controller
         await sj.init()
 
-        // Set up libcurl transport
         const conn = new _0zzl94._ak44v7(BASE + 'bare-mux/bare-mux-worker.js')
         await conn.setTransport(BASE + 'transport/libcurl.mjs', [{ wisp: 'wss://anura.pro/wisp/' }])
 
         status.textContent = 'Ready'
 
-        // ── URL handling ──────────────────────────────────────────────────
-        // Rules:
-        //   - Already has http:// or https://  → use exactly as typed
-        //   - Looks like a domain (has a dot, no spaces) → add https://
-        //   - Everything else → Google search
-        // http:// is ONLY used when the user explicitly types it.
+        // ── URL normalisation ─────────────────────────────────────────────
+        // Used both by the search bar AND by the SW rewriter when it encounters
+        // links that have no protocol (e.g. href="example.com/page").
+        // Fix 1: new-tab links — sj.encodeUrl() always receives a fully-qualified
+        //         URL because we normalise before handing off.
+        // Fix 2: searches go to DuckDuckGo instead of Google.
 
         function toUrl(raw) {
           const s = raw.trim()
           if (!s) return null
 
-          // Explicit protocol typed by user — honour it exactly
+          // User explicitly typed a protocol — honour it exactly
           if (/^https?:\/\//i.test(s)) return s
 
-          // Looks like a domain — always use https://
+          // Looks like a domain (has a dot, no spaces) — always assume https://
+          // This also covers protocol-relative links like "//example.com"
+          if (/^\/\//.test(s)) return 'https:' + s
           if (/^[^\s]+\.[^\s]+$/.test(s)) return 'https://' + s
 
-          // Treat as search
-          return 'https://www.google.com/search?q=' + encodeURIComponent(s)
+          // Everything else is a search query → DuckDuckGo
+          return 'https://duckduckgo.com/?q=' + encodeURIComponent(s)
         }
 
         function navigate(raw) {
