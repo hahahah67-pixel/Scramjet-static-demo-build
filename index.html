@@ -40,14 +40,11 @@
     <script type="module">
       const status = document.getElementById('status')
       try {
-        // BASE = /Scramjet-static-demo-build/ on GitHub Pages, / on custom domain
         const BASE = new URL('./', document.baseURI).pathname
 
-        // Dynamic import guarantees scramjet.js fully executes before we use its globals
         await import('./scramjet-engine/scramjet.js')
         const { ScramjetController } = $scramjetLoadController()
 
-        // Use BASE for prefix so SW routes match on GitHub Pages subpath
         const sj = new ScramjetController({
           prefix: BASE + 'scramjet/',
           files: {
@@ -57,33 +54,70 @@
           },
         })
 
-        // Register SW first
+        // ── Service Worker activation ─────────────────────────────────────
+        // This is the fix for the back-button hang.
+        //
+        // navigator.serviceWorker.controller is non-null when the SW is already
+        // active and controlling this page (e.g. back navigation, reload).
+        // In that case we skip the statechange wait entirely — it would never fire.
+        //
+        // On first ever load, controller is null and we wait for the SW to activate.
+        // On a SW update, waiting is also correct.
+
         const reg = await navigator.serviceWorker.register(BASE + 'sw.js', { scope: BASE })
 
-        // Wait for SW to be active (handles first-install and updates)
-        await new Promise(resolve => {
-          if (reg.active) { resolve(); return }
-          const sw = reg.installing || reg.waiting
-          if (sw) sw.addEventListener('statechange', e => { if (e.target.state === 'activated') resolve() })
-        })
+        if (!navigator.serviceWorker.controller) {
+          // First load — SW is installing. Wait until it activates.
+          await new Promise(resolve => {
+            // reg.active means it activated synchronously (rare but possible)
+            if (reg.active && reg.active.state === 'activated') { resolve(); return }
 
-        // NOW call init — this writes config to IDB and posts loadConfig to the active SW
+            const candidate = reg.installing || reg.waiting || reg.active
+            if (!candidate) { resolve(); return }
+
+            candidate.addEventListener('statechange', function handler(e) {
+              if (e.target.state === 'activated') {
+                candidate.removeEventListener('statechange', handler)
+                resolve()
+              }
+            })
+          })
+        }
+        // If controller already exists we fall straight through — SW is live.
+
+        // Write config to IDB and post loadConfig to the active SW controller
         await sj.init()
 
-        // Set up transport AFTER SW is active and has config
+        // Set up libcurl transport
         const conn = new _0zzl94._ak44v7(BASE + 'bare-mux/bare-mux-worker.js')
         await conn.setTransport(BASE + 'transport/libcurl.mjs', [{ wisp: 'wss://anura.pro/wisp/' }])
 
         status.textContent = 'Ready'
 
+        // ── URL handling ──────────────────────────────────────────────────
+        // Rules:
+        //   - Already has http:// or https://  → use exactly as typed
+        //   - Looks like a domain (has a dot, no spaces) → add https://
+        //   - Everything else → Google search
+        // http:// is ONLY used when the user explicitly types it.
+
+        function toUrl(raw) {
+          const s = raw.trim()
+          if (!s) return null
+
+          // Explicit protocol typed by user — honour it exactly
+          if (/^https?:\/\//i.test(s)) return s
+
+          // Looks like a domain — always use https://
+          if (/^[^\s]+\.[^\s]+$/.test(s)) return 'https://' + s
+
+          // Treat as search
+          return 'https://www.google.com/search?q=' + encodeURIComponent(s)
+        }
+
         function navigate(raw) {
-          if (!raw.trim()) return
-          let url = raw.trim()
-          if (!/^https?:\/\//i.test(url)) {
-            url = /^[^\s]+\.[^\s]+$/.test(url)
-              ? 'https://' + url
-              : 'https://www.google.com/search?q=' + encodeURIComponent(url)
-          }
+          const url = toUrl(raw)
+          if (!url) return
           window.location.href = sj.encodeUrl(url)
         }
 
