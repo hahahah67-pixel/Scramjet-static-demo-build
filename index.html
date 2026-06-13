@@ -12,7 +12,7 @@
       rel="stylesheet"
     />
 
-    <!-- bare-mux is UMD — plain script, sets globalThis._0zzl94 synchronously -->
+    <!-- bare-mux UMD — plain script, sets globalThis._0zzl94 synchronously -->
     <script src="./bare-mux/bare-mux.js"></script>
 
     <style>
@@ -47,30 +47,36 @@
     <script type="module">
       const status = document.getElementById('status')
       try {
+        // BASE = /Scramjet-static-demo-build/ on GitHub Pages, or / on custom domain
+        // Every single path passed to Scramjet, bare-mux, and SW registration
+        // must be prefixed with BASE so they resolve correctly on the subpath
         const BASE = new URL('./', document.baseURI).pathname
 
-        // Import scramjet directly — guarantees it's fully executed before we use it
-        // This is the only reliable way to load an ES module and use its globals
+        // Dynamic import guarantees scramjet.bundle.js fully executes
+        // before we call $scramjetLoadController()
         await import('./scramjet-engine/scramjet.js')
 
         const { ScramjetController } = $scramjetLoadController()
 
         const sj = new ScramjetController({
-          prefix: '/scramjet/',
+          // prefix must include BASE so proxied URLs are under the correct subpath
+          prefix: BASE + 'scramjet/',
           files: {
-            wasm: '/scramjet-engine/scramjet.wasm',
-            all:  '/scramjet-engine/scramjet-all.js',
-            sync: '/scramjet-engine/scramjet-sync.js',
+            wasm: BASE + 'scramjet-engine/scramjet.wasm',
+            all:  BASE + 'scramjet-engine/scramjet-all.js',
+            sync: BASE + 'scramjet-engine/scramjet-sync.js',
           },
         })
 
         await sj.init()
 
+        // SW scope and script path both use BASE
         await navigator.serviceWorker.register(BASE + 'sw.js', { scope: BASE })
         await navigator.serviceWorker.ready
 
-        const conn = new _0zzl94._ak44v7('/bare-mux/bare-mux-worker.js')
-        await conn.setTransport('/transport/libcurl.mjs', [{ wisp: 'wss://anura.pro/wisp/' }])
+        // bare-mux worker and transport paths also need BASE
+        const conn = new _0zzl94._ak44v7(BASE + 'bare-mux/bare-mux-worker.js')
+        await conn.setTransport(BASE + 'transport/libcurl.mjs', [{ wisp: 'wss://anura.pro/wisp/' }])
 
         status.textContent = 'Ready'
 
