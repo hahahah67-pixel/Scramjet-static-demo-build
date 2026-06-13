@@ -5,27 +5,32 @@
 importScripts('./scramjet-engine/scramjet.js')
 
 const { _5vlbtx: ScramjetServiceWorker } = _zx1lz2()
-const sw = new ScramjetServiceWorker()
+const proxySw = new ScramjetServiceWorker()
 
 self.addEventListener('install', () => {
-  self.skipWaiting()
+  void self.skipWaiting()
 })
 
-self.addEventListener('activate', event => {
+self.addEventListener('activate', (event) => {
   event.waitUntil(self.clients.claim())
 })
 
-self.addEventListener('fetch', event => {
+async function handleRequest(event) {
+  // loadConfig must be called before routing — syncs config from the controller
+  await proxySw.loadConfig()
+
+  if (!proxySw.route(event)) {
+    try {
+      return await fetch(event.request)
+    } catch {
+      return new Response('Network error', { status: 503, statusText: 'Service Unavailable' })
+    }
+  }
+
+  return await proxySw.fetch(event)
+}
+
+self.addEventListener('fetch', (event) => {
   if (new URL(event.request.url).origin !== self.location.origin) return
-
-  if (!sw.route(event)) return
-
-  event.respondWith(
-    sw.fetch(event).catch(() =>
-      new Response('Network error', {
-        status: 503,
-        statusText: 'Service Unavailable',
-      })
-    )
-  )
+  event.respondWith(handleRequest(event))
 })
