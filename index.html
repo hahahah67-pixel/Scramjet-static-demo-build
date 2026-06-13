@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Scramjet STATIC</title>
 
-    <!-- Roboto from Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -13,17 +12,12 @@
       rel="stylesheet"
     />
 
-    <!-- Scramjet SW runtime (must load before SW registration) -->
+    <!-- These two MUST be plain <script> tags (not modules) so they set globals before the module below runs -->
     <script src="./scramjet-engine/scramjet.js"></script>
-    <!-- bare-mux client -->
     <script src="./bare-mux/bare-mux.js"></script>
 
     <style>
-      *, *::before, *::after {
-        box-sizing: border-box;
-        margin: 0;
-        padding: 0;
-      }
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
       html, body {
         height: 100%;
@@ -50,9 +44,7 @@
         text-shadow: 0 0 40px rgba(255,255,255,0.18);
       }
 
-      .title span {
-        font-weight: 500;
-      }
+      .title span { font-weight: 500; }
 
       .bar-wrap {
         width: min(600px, 88vw);
@@ -74,10 +66,7 @@
         backdrop-filter: blur(6px);
       }
 
-      .bar-wrap input::placeholder {
-        color: rgba(255,255,255,0.38);
-      }
-
+      .bar-wrap input::placeholder { color: rgba(255,255,255,0.38); }
       .bar-wrap input:focus {
         border-color: rgba(255,255,255,0.45);
         background: rgba(255,255,255,0.1);
@@ -98,9 +87,7 @@
         transition: color 0.2s;
       }
 
-      .bar-wrap button:hover {
-        color: #fff;
-      }
+      .bar-wrap button:hover { color: #fff; }
 
       #status {
         margin-top: 1rem;
@@ -140,7 +127,11 @@
     </div>
 
     <script type="module">
+      // Derive base path dynamically — works whether hosted at / or /Scramjet-static-demo-build/
+      const BASE = new URL('./', document.baseURI).pathname
+
       // ── 1. Scramjet controller ──────────────────────────────────────────
+      // prefix MUST be '/scramjet/' — this is patched into scramjet.js to match
       const { _4efsla: ScramjetController } = _zx1lz2()
 
       const sj = new ScramjetController({
@@ -155,14 +146,15 @@
       await sj.init()
 
       // ── 2. Service worker ───────────────────────────────────────────────
-      await navigator.serviceWorker.register('/sw.js', { scope: '/' })
+      // Use BASE-relative registration so it works on GitHub Pages subpaths
+      await navigator.serviceWorker.register(BASE + 'sw.js', { scope: BASE })
       await navigator.serviceWorker.ready
 
       // ── 3. Transport — libcurl over anura.pro (non-Cloudflare) ─────────
       const WISP_URL = 'wss://anura.pro/wisp/'
 
-      const conn = new _0zzl94._ak44v7('/bare-mux/bare-mux-worker.js')
-      await conn.setTransport('/transport/libcurl.mjs', [{ wisp: WISP_URL }])
+      const conn = new _0zzl94._ak44v7(BASE + 'bare-mux/bare-mux-worker.js')
+      await conn.setTransport(BASE + 'transport/libcurl.mjs', [{ wisp: WISP_URL }])
 
       document.getElementById('status').textContent = 'Ready'
 
@@ -183,9 +175,7 @@
       const bar = document.getElementById('searchbar')
       const btn = document.getElementById('go-btn')
 
-      bar.addEventListener('keydown', e => {
-        if (e.key === 'Enter') navigate(bar.value)
-      })
+      bar.addEventListener('keydown', e => { if (e.key === 'Enter') navigate(bar.value) })
       btn.addEventListener('click', () => navigate(bar.value))
     </script>
   </body>
