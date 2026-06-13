@@ -1,5 +1,6 @@
-scramjet STATIC Build: 1.5 (first officially markeded build BTW)
+SCRAMJET - STATIC Build: 1.5 (first officially markeded build BTW)
 created+founded by: hahahah67-pixel
+
 
 A static build of Scramjet internet proxy by mecuryworkshop powered by public WISP libcurl URL by aura.pro
 
@@ -11,4 +12,4 @@ This project and all other open-source technolgies used in it are lisenced by th
 
 this static Scramjet build is of scramjet 1.10 and uses the same engine parts straight from the offical Scramjet Example-App
 
-Thank you for supporting thai project!! If you fork it plz ⭐ it!!
+Thank you for supporting this project!! If you fork it plz also ⭐ it!!
