@@ -21,6 +21,35 @@ This static variant is built on Scramjet version 1.10 and utilizes the core engi
 
 ---
 
+## File Structure
+
+└── Scramjet-static-demo-build-main
+    └── .github
+        ├── ISSUE_TEMPLATE
+        │   ├── bug_report.md
+        │   ├── config.yml
+        │   ├── Djdjdh.txt
+        ├── workflows
+        │   └── docker-image.yml
+        │   └── eslint.yml
+    └── bare-mux
+        ├── bare-mux-worker.js
+        ├── bare-mux.js
+    └── scramjet-engine
+        ├── scramjet-all.js
+        ├── scramjet-sync.js
+        ├── scramjet.js
+        ├── scramjet.wasm
+    └── transport
+        ├── libcurl.mjs
+        ├── scramjett.png
+    └── index.html
+    └── LICENSE
+    └── README.md
+    └── sw.js
+    
+    ---
+    
 ## 📄 License & Legal
 
 * **License:** This project and the open-source technologies it utilizes are licensed under the **AGPL 3.0 Public License**.
