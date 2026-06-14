@@ -42,8 +42,8 @@
 
     <iframe
       id="browser"
-      sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads"
-      allow="autoplay; fullscreen"
+      sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads allow-pointer-lock allow-top-navigation-by-user-activation"
+      allow="autoplay; fullscreen; clipboard-read; clipboard-write"
     ></iframe>
 
     <script type="module">
@@ -72,7 +72,10 @@
       }
 
       window.addEventListener('popstate', () => {
-        if (browsing) showHome()
+        if (browsing) {
+          showHome()
+          history.pushState({ home: true }, '')
+        }
       })
 
       function toUrl(raw) {
@@ -86,7 +89,7 @@
 
       try {
         const BASE   = new URL('./', document.baseURI).pathname
-        const WISP   = 'wss://anura.pro/wisp/'
+        const WISP   = 'wss://wisp-wdnb.onrender.com/wisp/'
         const PREFIX = BASE + 'scramjet/'
 
         status.textContent = 'Loading engine…'
@@ -113,6 +116,7 @@
         const conn = new _0zzl94._ak44v7(BASE + 'bare-mux/bare-mux-worker.js')
         await conn.setTransport(BASE + 'transport/libcurl.mjs', [{ wisp: WISP }])
 
+        history.replaceState({ home: true }, '')
         status.textContent = 'Ready'
 
         function navigate(raw) {
