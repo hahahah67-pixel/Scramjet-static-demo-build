@@ -7,10 +7,6 @@ importScripts('./scramjet-engine/scramjet-all.js')
 const { ScramjetServiceWorker } = $scramjetLoadWorker()
 const scramjet = new ScramjetServiceWorker()
 
-// Derive BASE from the SW script URL
-// e.g. https://user.github.io/Repo/sw.js -> https://user.github.io/Repo/
-const SW_BASE = self.location.href.slice(0, self.location.href.lastIndexOf('/') + 1)
-
 self.addEventListener('install', () => {
   self.skipWaiting()
 })
@@ -19,58 +15,45 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(self.clients.claim())
 })
 
-// Decode a scramjet-encoded URL back to the real destination
-function getDecodedUrl(reqUrl) {
+// Decode a scramjet-encoded URL back to the real destination URL
+function getDecodedUrl(encodedUrl) {
   try {
     if (!scramjet.config) return null
     const prefix = self.location.origin + scramjet.config.prefix
-    if (!reqUrl.startsWith(prefix)) return null
-    return decodeURIComponent(reqUrl.slice(prefix.length))
+    if (!encodedUrl.startsWith(prefix)) return null
+    const encoded = encodedUrl.slice(prefix.length)
+    return decodeURIComponent(encoded)
   } catch {
     return null
   }
 }
 
-// Redirect to the 200.html error page (same-origin, correct BASE path)
-function errorPage() {
-  return new Response(
-    `<!doctype html><meta http-equiv="refresh" content="0;url=${SW_BASE}200.html">`,
-    { status: 200, headers: { 'Content-Type': 'text/html' } }
-  )
-}
-
 async function handleRequest(event) {
   await scramjet.loadConfig()
 
-  if (!scramjet.route(event)) {
-    return fetch(event.request).catch(() =>
-      new Response('Network error', { status: 503 })
-    )
-  }
+  if (!scramjet.route(event)) return fetch(event.request)
 
-  // Decode the real destination URL and check for unsupported protocols
+  // Check if the destination URL uses a non-http/https protocol
+  // (e.g. snssdk1340://, intent://, tiktok://, etc.)
+  // libcurl cannot handle these — return an empty 200 response silently
+  // instead of showing an ugly error screen
   const decoded = getDecodedUrl(event.request.url)
   if (decoded) {
     try {
-      const destUrl = new URL(decoded)
-      if (destUrl.protocol !== 'http:' && destUrl.protocol !== 'https:') {
-        return errorPage()
+      const url = new URL(decoded)
+      if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+        return new Response('', { status: 200 })
       }
     } catch {
-      return errorPage()
+      // Malformed URL — also silently ignore
+      return new Response('', { status: 200 })
     }
   }
 
-  return scramjet.fetch(event).catch(() => errorPage())
+  return scramjet.fetch(event)
 }
 
 self.addEventListener('fetch', (event) => {
-  let origin
-  try {
-    origin = new URL(event.request.url).origin
-  } catch {
-    return
-  }
-  if (origin !== self.location.origin) return
+  if (new URL(event.request.url).origin !== self.location.origin) return
   event.respondWith(handleRequest(event))
 })
