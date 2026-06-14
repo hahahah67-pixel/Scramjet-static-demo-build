@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Request Error</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500&display=swap" rel="stylesheet" />
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+      html, body {
+        height: 100%;
+        background: #0a0a0a;
+        font-family: 'Roboto', sans-serif;
+        color: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .container {
+        text-align: center;
+        padding: 2rem;
+        max-width: 480px;
+      }
+
+      .code {
+        font-size: 0.75rem;
+        font-weight: 500;
+        letter-spacing: 0.15em;
+        color: #f97316;
+        text-transform: uppercase;
+        margin-bottom: 1rem;
+      }
+
+      .message {
+        font-size: 1rem;
+        font-weight: 300;
+        color: rgba(255,255,255,0.7);
+        line-height: 1.6;
+        margin-bottom: 2rem;
+      }
+
+      .site {
+        font-weight: 500;
+        color: #fff;
+      }
+
+      .back-btn {
+        display: inline-block;
+        background: #f97316;
+        color: #000;
+        font-family: 'Roboto', sans-serif;
+        font-size: 0.9rem;
+        font-weight: 500;
+        letter-spacing: 0.04em;
+        padding: 0.65rem 1.8rem;
+        border-radius: 999px;
+        border: none;
+        cursor: pointer;
+        text-decoration: none;
+        transition: background 0.15s, transform 0.1s;
+      }
+
+      .back-btn:hover { background: #fb923c; }
+      .back-btn:active { transform: scale(0.97); }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <p class="code">Request Error</p>
+      <p class="message">
+        This website <span class="site" id="site-name"></span> has made a
+        malformed request or has crashed.
+      </p>
+      <button class="back-btn" onclick="history.back()">← Go Back</button>
+    </div>
+
+    <script>
+      // Extract the origin of the site that caused the error from the referrer
+      // so we can show "example.com" in the message
+      try {
+        const ref = document.referrer
+        if (ref) {
+          // referrer will be the scramjet-encoded URL, extract readable hostname
+          // by decoding the scramjet path component
+          const url = new URL(ref)
+          const path = url.pathname
+          // find the scramjet prefix and decode what comes after
+          const match = path.match(/\/scramjet\/(.+)/)
+          if (match) {
+            const decoded = decodeURIComponent(match[1])
+            const inner = new URL(decoded)
+            document.getElementById('site-name').textContent = '"' + inner.hostname + '"'
+          } else {
+            document.getElementById('site-name').textContent = '"' + url.hostname + '"'
+          }
+        } else {
+          document.getElementById('site-name').textContent = 'you were visiting'
+        }
+      } catch {
+        document.getElementById('site-name').textContent = 'you were visiting'
+      }
+    </script>
+  </body>
+</html>
