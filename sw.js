@@ -15,45 +15,44 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(self.clients.claim())
 })
 
-function getDecodedUrl(reqUrl) {
-  try {
-    if (!scramjet.config) return null
-    const prefix = self.location.origin + scramjet.config.prefix
-    if (!reqUrl.startsWith(prefix)) return null
-    return decodeURIComponent(reqUrl.slice(prefix.length))
-  } catch {
-    return null
-  }
-}
-
 async function handleRequest(event) {
-  await scramjet.loadConfig()
+  // Try to load config from IDB - but if it's not there yet, don't crash
+  try {
+    await scramjet.loadConfig()
+  } catch {
+    // Config not ready yet - pass through without proxying
+    return fetch(event.request).catch(() => new Response('', { status: 503 }))
+  }
+
+  // CRITICAL: if config still null after loadConfig, don't call route()
+  // route() crashes with TypeError if this.config is null
+  if (!scramjet.config) {
+    return fetch(event.request).catch(() => new Response('', { status: 503 }))
+  }
 
   if (!scramjet.route(event)) {
-    return fetch(event.request).catch(() =>
-      new Response('Network error', { status: 503 })
-    )
+    return fetch(event.request).catch(() => new Response('', { status: 503 }))
   }
 
-  const decoded = getDecodedUrl(event.request.url)
-  if (decoded) {
-    try {
+  // Filter out non-http protocols (app schemes like snssdk://)
+  try {
+    if (!scramjet.config) return new Response('', { status: 200 })
+    const prefix = self.location.origin + scramjet.config.prefix
+    if (event.request.url.startsWith(prefix)) {
+      const decoded = decodeURIComponent(event.request.url.slice(prefix.length))
       const destUrl = new URL(decoded)
       if (destUrl.protocol !== 'http:' && destUrl.protocol !== 'https:') {
         return new Response('', { status: 200 })
       }
-    } catch {
-      return new Response('', { status: 200 })
     }
+  } catch {
+    return new Response('', { status: 200 })
   }
 
-  return scramjet.fetch(event).catch(() =>
-    new Response('', { status: 200 })
-  )
+  return scramjet.fetch(event).catch(() => new Response('', { status: 200 }))
 }
 
 self.addEventListener('fetch', (event) => {
-  // Safe URL parse - non-http protocols like snssdk:// throw in new URL()
   let origin
   try {
     origin = new URL(event.request.url).origin
