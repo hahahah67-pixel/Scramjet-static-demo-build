@@ -75,10 +75,12 @@
         }
       }
 
-      window.addEventListener('popstate', () => {
+      window.addEventListener('popstate', (e) => {
+        // If we were browsing and popped back to the home sentinel,
+        // show home. Use replaceState not pushState so no orphan entries.
         if (browsing) {
           showHome()
-          history.pushState({ home: true }, '')
+          history.replaceState({ home: true }, '')
         }
       })
 
