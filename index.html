@@ -11,7 +11,7 @@
     <style>
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
       html, body { height: 100%; overflow: hidden; background: #000; font-family: 'Roboto', sans-serif; color: #fff; }
-      #home { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding-bottom: 12vh; background: #000; z-index: 10; transition: opacity 0.18s ease; }
+      #home { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding-bottom: 12vh; background: #000; z-index: 10; }
       #home.hidden { opacity: 0; pointer-events: none; }
       .title { font-size: clamp(2rem, 5vw, 3.5rem); font-weight: 300; letter-spacing: 0.04em; white-space: nowrap; margin-bottom: 2.2rem; text-shadow: 0 0 40px rgba(255,255,255,0.18); }
       .title span { font-weight: 500; }
@@ -22,7 +22,7 @@
       .bar-wrap button { position: absolute; right: 0.75rem; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; padding: 0.25rem; display: flex; align-items: center; color: rgba(255,255,255,0.5); transition: color 0.2s; }
       .bar-wrap button:hover { color: #fff; }
       #status { margin-top: 1rem; font-size: 0.78rem; color: rgba(255,255,255,0.3); letter-spacing: 0.03em; min-height: 1.2em; text-align: center; }
-      #browser { position: fixed; inset: 0; width: 100%; height: 100%; border: none; background: #111; z-index: 5; display: none; }
+      #browser { position: fixed; inset: 0; width: 100%; height: 100%; border: none; background: #000; z-index: 5; display: none; }
       #browser.visible { display: block; }
     </style>
   </head>
@@ -47,51 +47,93 @@
     ></iframe>
 
     <script type="module">
-      const status  = document.getElementById('status')
-      const home    = document.getElementById('home')
-      const frame   = document.getElementById('browser')
-      const bar     = document.getElementById('searchbar')
+      const status = document.getElementById('status')
+      const home   = document.getElementById('home')
+      const frame  = document.getElementById('browser')
+      const bar    = document.getElementById('searchbar')
 
+      let sj = null
       let browsing = false
+
+      // Keep pushing a fresh state on top so the back button ALWAYS
+      // has our handler's entry to pop — no matter how many iframe
+      // navigations Chrome adds to the joint history underneath us.
+      // This runs every time popstate fires and we're still browsing.
+      function pushGuard() {
+        history.pushState({ guard: true }, '')
+      }
 
       function showHome() {
         browsing = false
         home.classList.remove('hidden')
         frame.classList.remove('visible')
+        // Blank the iframe cleanly
+        try { frame.contentWindow.location.replace('about:blank') } catch {}
         bar.value = ''
       }
 
       function showBrowser(encodedUrl) {
-        // Use replace() so about:blank is NOT added to iframe history
-        // This prevents the black blank-page flash when pressing back
-        if (!browsing) {
-          // First navigation: use replace so no blank entry in iframe history
-          frame.contentWindow.location.replace(encodedUrl)
-        } else {
-          frame.src = encodedUrl
-        }
+        frame.src = encodedUrl
         home.classList.add('hidden')
         frame.classList.add('visible')
         if (!browsing) {
-          // Push ONE sentinel entry so back button works
-          history.pushState({ browsing: true }, '')
           browsing = true
+          // Push TWO entries: one base so we never fall off the bottom,
+          // one guard on top that we keep refreshing
+          history.pushState({ base: true }, '')
+          history.pushState({ guard: true }, '')
+        } else {
+          pushGuard()
         }
       }
 
-      // hashchange is fired when location.hash changes — completely separate
-      // from iframe joint history, so Chrome never confuses them
-      window.addEventListener('hashchange', () => {
-        if (location.hash === '' || location.hash === '#') {
-          if (browsing) showHome()
+      // Track if iframe responded to a back() call
+      let waitingForIframeBack = false
+      let iframeBackTimer = null
+
+      frame.addEventListener('load', () => {
+        if (browsing) {
+          // Iframe navigated — clear the waiting flag and push fresh guard
+          waitingForIframeBack = false
+          clearTimeout(iframeBackTimer)
+          pushGuard()
         }
       })
 
-      // popstate catches back button when hash approach alone isn't enough
       window.addEventListener('popstate', (e) => {
-        if (e.state && e.state.browsing) {
-          showHome()
-          history.replaceState({ home: true }, '')
+        if (!browsing) return
+
+        if (e.state && (e.state.guard || e.state.base)) {
+          if (waitingForIframeBack) {
+            // We already tried going back in iframe and it didn't navigate
+            // (timer would have cleared waitingForIframeBack if it had)
+            // This means iframe is out of history — go home
+            clearTimeout(iframeBackTimer)
+            waitingForIframeBack = false
+            showHome()
+            return
+          }
+
+          // Try going back in the iframe
+          waitingForIframeBack = true
+          try {
+            frame.contentWindow.history.back()
+          } catch {
+            showHome()
+            return
+          }
+
+          // If iframe doesn't fire a load event within 300ms,
+          // it had no history to go back to — go home
+          iframeBackTimer = setTimeout(() => {
+            if (waitingForIframeBack && browsing) {
+              waitingForIframeBack = false
+              showHome()
+            }
+          }, 300)
+
+          // Keep a guard on top so next back press is caught too
+          history.pushState({ guard: true }, '')
         }
       })
 
@@ -126,7 +168,7 @@
 
         status.textContent = 'Starting controller…'
         const { ScramjetController } = $scramjetLoadController()
-        const sj = new ScramjetController({
+        sj = new ScramjetController({
           prefix: PREFIX,
           files: {
             wasm: BASE + 'scramjet-engine/scramjet.wasm',
@@ -153,7 +195,6 @@
         const conn = new _0zzl94._ak44v7(BASE + 'bare-mux/bare-mux-worker.js')
         await conn.setTransport(BASE + 'transport/libcurl.mjs', [{ wisp: WISP }])
 
-        history.replaceState({ home: true }, '')
         status.textContent = 'Ready'
 
         function navigate(raw) {
