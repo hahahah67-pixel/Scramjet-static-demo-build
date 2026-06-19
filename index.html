@@ -76,10 +76,14 @@
       }
 
       window.addEventListener('popstate', (e) => {
-        // If we were browsing and popped back to the home sentinel,
-        // show home. Use replaceState not pushState so no orphan entries.
-        if (browsing) {
+        // When popstate fires, the state tells us where we are.
+        // If state is {browsing:true} we just went BACK to the browsing sentinel
+        // which means user exhausted iframe history -> show home.
+        // Any other state (including null from iframe navigations) -> ignore,
+        // Chrome is handling iframe back/forward natively.
+        if (e.state && e.state.browsing) {
           showHome()
+          // Replace the browsing entry with home so it doesn't linger
           history.replaceState({ home: true }, '')
         }
       })
