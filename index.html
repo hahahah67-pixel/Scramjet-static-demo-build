@@ -11,7 +11,7 @@
     <style>
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
       html, body { height: 100%; overflow: hidden; background: #000; font-family: 'Roboto', sans-serif; color: #fff; }
-      #home { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding-bottom: 12vh; background: #000; z-index: 10; transition: opacity 0.18s ease; }
+      #home { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding-bottom: 12vh; background: #000; z-index: 10; }
       #home.hidden { opacity: 0; pointer-events: none; }
       .title { font-size: clamp(2rem, 5vw, 3.5rem); font-weight: 300; letter-spacing: 0.04em; white-space: nowrap; margin-bottom: 2.2rem; text-shadow: 0 0 40px rgba(255,255,255,0.18); }
       .title span { font-weight: 500; }
@@ -22,7 +22,7 @@
       .bar-wrap button { position: absolute; right: 0.75rem; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; padding: 0.25rem; display: flex; align-items: center; color: rgba(255,255,255,0.5); transition: color 0.2s; }
       .bar-wrap button:hover { color: #fff; }
       #status { margin-top: 1rem; font-size: 0.78rem; color: rgba(255,255,255,0.3); letter-spacing: 0.03em; min-height: 1.2em; text-align: center; }
-      #browser { position: fixed; inset: 0; width: 100%; height: 100%; border: none; background: #111; z-index: 5; display: none; }
+      #browser { position: fixed; inset: 0; width: 100%; height: 100%; border: none; background: #000; z-index: 5; display: none; }
       #browser.visible { display: block; }
     </style>
   </head>
@@ -47,51 +47,60 @@
     ></iframe>
 
     <script type="module">
-      const status  = document.getElementById('status')
-      const home    = document.getElementById('home')
-      const frame   = document.getElementById('browser')
-      const bar     = document.getElementById('searchbar')
+      const status = document.getElementById('status')
+      const home   = document.getElementById('home')
+      const frame  = document.getElementById('browser')
+      const bar    = document.getElementById('searchbar')
 
+      let sj = null
       let browsing = false
+      // Track how many pages deep the iframe has gone so we know
+      // when it has reached the beginning and back should go home
+      let iframeDepth = 0
 
       function showHome() {
         browsing = false
+        iframeDepth = 0
         home.classList.remove('hidden')
         frame.classList.remove('visible')
+        try { frame.contentWindow.location.replace('about:blank') } catch {}
         bar.value = ''
       }
 
       function showBrowser(encodedUrl) {
-        // Use replace() so about:blank is NOT added to iframe history
-        // This prevents the black blank-page flash when pressing back
-        if (!browsing) {
-          // First navigation: use replace so no blank entry in iframe history
-          frame.contentWindow.location.replace(encodedUrl)
-        } else {
-          frame.src = encodedUrl
-        }
+        frame.src = encodedUrl
         home.classList.add('hidden')
         frame.classList.add('visible')
-        if (!browsing) {
-          // Push ONE sentinel entry so back button works
-          history.pushState({ browsing: true }, '')
-          browsing = true
-        }
+        browsing = true
+        iframeDepth = 1
+        // Single guard entry — back button hits this, we decide what to do
+        history.replaceState({ guard: true }, '')
       }
 
-      // hashchange is fired when location.hash changes — completely separate
-      // from iframe joint history, so Chrome never confuses them
-      window.addEventListener('hashchange', () => {
-        if (location.hash === '' || location.hash === '#') {
-          if (browsing) showHome()
-        }
+      // Each time iframe loads a page, depth increases
+      frame.addEventListener('load', () => {
+        if (!browsing) return
+        // Don't count about:blank
+        try {
+          if (frame.contentWindow.location.href === 'about:blank') return
+        } catch {}
+        iframeDepth++
+        // Always keep one guard entry so back is intercepted
+        history.replaceState({ guard: true }, '')
       })
 
-      // popstate catches back button when hash approach alone isn't enough
       window.addEventListener('popstate', (e) => {
-        if (e.state && e.state.browsing) {
+        if (!browsing) return
+
+        if (iframeDepth > 1) {
+          // Iframe has history — go back in it
+          iframeDepth--
+          frame.contentWindow.history.back()
+          // Restore our guard so next back is also intercepted
+          history.pushState({ guard: true }, '')
+        } else {
+          // Iframe is at its first page — go home
           showHome()
-          history.replaceState({ home: true }, '')
         }
       })
 
@@ -126,7 +135,7 @@
 
         status.textContent = 'Starting controller…'
         const { ScramjetController } = $scramjetLoadController()
-        const sj = new ScramjetController({
+        sj = new ScramjetController({
           prefix: PREFIX,
           files: {
             wasm: BASE + 'scramjet-engine/scramjet.wasm',
@@ -153,7 +162,8 @@
         const conn = new _0zzl94._ak44v7(BASE + 'bare-mux/bare-mux-worker.js')
         await conn.setTransport(BASE + 'transport/libcurl.mjs', [{ wisp: WISP }])
 
-        history.replaceState({ home: true }, '')
+        // Set initial guard
+        history.replaceState({ guard: true }, '')
         status.textContent = 'Ready'
 
         function navigate(raw) {
@@ -172,4 +182,5 @@
       }
     </script>
   </body>
-</html>
+  </html>
+          
