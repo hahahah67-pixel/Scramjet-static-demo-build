@@ -48,6 +48,19 @@
       #home-fab.visible { display: flex; }
       #home-fab:hover { background: rgba(255,255,255,0.12); }
       #home-fab:active { transform: translateX(-50%) scale(0.92); }
+
+      /* Slim baby-blue loading bar, top of the iframe */
+      #load-bar {
+        position: fixed;
+        top: 0; left: 0;
+        height: 3px;
+        width: 0%;
+        background: #7ec8ff;
+        box-shadow: 0 0 6px rgba(126,200,255,0.6);
+        z-index: 25;
+        opacity: 0;
+        border-radius: 0 2px 2px 0;
+      }
     </style>
   </head>
   <body>
@@ -70,6 +83,9 @@
       allow="autoplay; fullscreen"
     ></iframe>
 
+    <!-- Baby blue loading bar -->
+    <div id="load-bar"></div>
+
     <!-- Manual home button — bypasses browser history entirely -->
     <div id="home-fab" title="Home" aria-label="Go home">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -84,6 +100,48 @@
       const frame   = document.getElementById('browser')
       const bar     = document.getElementById('searchbar')
       const homeFab = document.getElementById('home-fab')
+      const loadBar = document.getElementById('load-bar')
+
+      // ── Loading bar — fake but convincing multi-stage progress ────────
+      // Fast burst at the start, slows down as it approaches the "end",
+      // then snaps to 100% and fades when the iframe actually fires load.
+      let loadBarTimer = null
+      let loadBarStep = null
+
+      function startLoadBar() {
+        clearTimeout(loadBarTimer)
+        clearInterval(loadBarStep)
+        loadBar.style.transition = 'none'
+        loadBar.style.width = '0%'
+        loadBar.style.opacity = '1'
+
+        // Force reflow so the transition below actually applies
+        void loadBar.offsetWidth
+
+        let pct = 0
+        loadBar.style.transition = 'width 0.2s linear'
+        loadBarStep = setInterval(() => {
+          // Slow down as we approach 90% — never quite finishes on its own
+          const remaining = 90 - pct
+          const step = Math.max(remaining * 0.08, 0.4)
+          pct = Math.min(pct + step, 90)
+          loadBar.style.width = pct + '%'
+          if (pct >= 90) clearInterval(loadBarStep)
+        }, 120)
+      }
+
+      function finishLoadBar() {
+        clearInterval(loadBarStep)
+        loadBar.style.transition = 'width 0.25s ease'
+        loadBar.style.width = '100%'
+        loadBarTimer = setTimeout(() => {
+          loadBar.style.transition = 'opacity 0.3s ease'
+          loadBar.style.opacity = '0'
+          loadBarTimer = setTimeout(() => {
+            loadBar.style.width = '0%'
+          }, 300)
+        }, 200)
+      }
 
       let browsing = false
 
@@ -96,6 +154,7 @@
       }
 
       function showBrowser(encodedUrl) {
+        startLoadBar()
         if (!browsing) {
           frame.contentWindow.location.replace(encodedUrl)
         } else {
@@ -109,6 +168,12 @@
           browsing = true
         }
       }
+
+      // Fire the loading bar to completion whenever the iframe finishes
+      // loading — this covers both initial navigation and in-site link clicks
+      frame.addEventListener('load', () => {
+        if (browsing) finishLoadBar()
+      })
 
       // The manual home button — direct call, no history/popstate involved
       // at all, so it can never be broken by Chrome's iframe joint history
