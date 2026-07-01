@@ -250,6 +250,7 @@
 
       let browsing = false
 
+      const BASE = new URL('./', document.baseURI).pathname
       const DEFAULT_WISP = 'wss://anura.pro/wisp/'
       let currentConn = null // set once bare-mux connection object exists
 
@@ -274,9 +275,14 @@
       }
 
       async function applyWisp(url, { persist = true } = {}) {
-        if (!currentConn) return
+        if (!currentConn) {
+          console.warn('[Scramjet STATIC] Cannot set WISP — transport not ready yet')
+          wispSetBtn.textContent = 'Not ready…'
+          setTimeout(() => { wispSetBtn.textContent = 'Set' }, 1500)
+          return
+        }
         await currentConn.setTransport(
-          new URL('./', document.baseURI).pathname + 'transport/libcurl.mjs',
+          BASE + 'transport/libcurl.mjs',
           [{ wisp: url }]
         )
         if (persist) localStorage.setItem('fish-wisp', url)
@@ -359,7 +365,6 @@
       }
 
       try {
-        const BASE   = new URL('./', document.baseURI).pathname
         const WISP   = getSavedWisp()
         const PREFIX = BASE + 'scramjet/'
 
@@ -428,3 +433,4 @@
     </script>
   </body>
 </html>
+  
