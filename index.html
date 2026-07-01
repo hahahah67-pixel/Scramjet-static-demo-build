@@ -11,7 +11,7 @@
     <style>
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
       html, body { height: 100%; overflow: hidden; background: #000; font-family: 'Roboto', sans-serif; color: #fff; }
-      #home { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding-bottom: 12vh; background: #000; z-index: 10; }
+      #home { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding-bottom: 12vh; background: #000; z-index: 10; transition: opacity 0.18s ease; }
       #home.hidden { opacity: 0; pointer-events: none; }
       .title { font-size: clamp(2rem, 5vw, 3.5rem); font-weight: 300; letter-spacing: 0.04em; white-space: nowrap; margin-bottom: 2.2rem; text-shadow: 0 0 40px rgba(255,255,255,0.18); }
       .title span { font-weight: 500; }
@@ -22,8 +22,32 @@
       .bar-wrap button { position: absolute; right: 0.75rem; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; padding: 0.25rem; display: flex; align-items: center; color: rgba(255,255,255,0.5); transition: color 0.2s; }
       .bar-wrap button:hover { color: #fff; }
       #status { margin-top: 1rem; font-size: 0.78rem; color: rgba(255,255,255,0.3); letter-spacing: 0.03em; min-height: 1.2em; text-align: center; }
-      #browser { position: fixed; inset: 0; width: 100%; height: 100%; border: none; background: #000; z-index: 5; display: none; }
+      #browser { position: fixed; inset: 0; width: 100%; height: 100%; border: none; background: #111; z-index: 5; display: none; }
       #browser.visible { display: block; }
+
+      /* Floating home button — small black pill, bottom center */
+      #home-fab {
+        position: fixed;
+        bottom: 1.1rem;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 20;
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        background: rgba(0,0,0,0.75);
+        border: 1px solid rgba(255,255,255,0.15);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        backdrop-filter: blur(8px);
+        transition: background 0.15s, transform 0.1s;
+        color: #fff;
+      }
+      #home-fab.visible { display: flex; }
+      #home-fab:hover { background: rgba(255,255,255,0.12); }
+      #home-fab:active { transform: translateX(-50%) scale(0.92); }
     </style>
   </head>
   <body>
@@ -46,98 +70,58 @@
       allow="autoplay; fullscreen"
     ></iframe>
 
+    <!-- Manual home button — bypasses browser history entirely -->
+    <div id="home-fab" title="Home" aria-label="Go home">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+        <polyline points="9 22 9 12 15 12 15 22"/>
+      </svg>
+    </div>
+
     <script type="module">
-      const status = document.getElementById('status')
-      const home   = document.getElementById('home')
-      const frame  = document.getElementById('browser')
-      const bar    = document.getElementById('searchbar')
+      const status  = document.getElementById('status')
+      const home    = document.getElementById('home')
+      const frame   = document.getElementById('browser')
+      const bar     = document.getElementById('searchbar')
+      const homeFab = document.getElementById('home-fab')
 
-      let sj = null
       let browsing = false
-
-      // Our OWN in-memory history stack for the iframe — completely
-      // independent of the browser's real history. We never read from
-      // or rely on browser history state beyond "a back button was pressed".
-      let stack = []       // array of encoded URLs
-      let stackIndex = -1  // current position in stack
 
       function showHome() {
         browsing = false
-        stack = []
-        stackIndex = -1
         home.classList.remove('hidden')
         frame.classList.remove('visible')
-        try { frame.contentWindow.location.replace('about:blank') } catch {}
+        homeFab.classList.remove('visible')
         bar.value = ''
       }
 
-      // Load a URL into the iframe WITHOUT touching our stack
-      // (used when we navigate due to back/forward within our own stack)
-      function loadIntoFrame(encodedUrl) {
-        frame.src = encodedUrl
-      }
-
-      // User explicitly navigates to a new URL (typed in bar, or clicked home->site)
-      // This TRUNCATES any forward history and pushes a new entry
-      function pushUrl(encodedUrl) {
-        stack = stack.slice(0, stackIndex + 1)
-        stack.push(encodedUrl)
-        stackIndex = stack.length - 1
-      }
-
       function showBrowser(encodedUrl) {
+        if (!browsing) {
+          frame.contentWindow.location.replace(encodedUrl)
+        } else {
+          frame.src = encodedUrl
+        }
         home.classList.add('hidden')
         frame.classList.add('visible')
-        browsing = true
-        pushUrl(encodedUrl)
-        loadIntoFrame(encodedUrl)
-        // Single fresh guard — we always keep exactly one entry ahead
-        // of wherever the browser's real history currently sits.
-        history.pushState({ guard: true, ts: Date.now() }, '')
+        homeFab.classList.add('visible')
+        if (!browsing) {
+          history.pushState({ browsing: true }, '')
+          browsing = true
+        }
       }
 
-      // Detect in-iframe link clicks (same-tab navigation within the proxy)
-      // by watching load events and comparing the resulting URL against
-      // what we expect from our own stack. If the user clicked a link inside
-      // the site (not us calling loadIntoFrame for back/forward), the new
-      // location differs from stack[stackIndex] — treat it as a new push.
-      let expectingFrameLoad = false
-
-      frame.addEventListener('load', () => {
-        if (!browsing) return
-        if (expectingFrameLoad) {
-          // This load was triggered by OUR back/forward — don't push
-          expectingFrameLoad = false
-          return
-        }
-        // This load was triggered by the user clicking a link inside the site
-        try {
-          const currentSrc = frame.contentWindow.location.href
-          if (currentSrc && currentSrc !== 'about:blank' && currentSrc !== stack[stackIndex]) {
-            pushUrl(currentSrc)
-          }
-        } catch {
-          // Cross-origin — can't read href, but scramjet keeps things same-origin
-          // via the prefix so this shouldn't normally happen
-        }
+      // The manual home button — direct call, no history/popstate involved
+      // at all, so it can never be broken by Chrome's iframe joint history
+      homeFab.addEventListener('click', () => {
+        showHome()
+        history.replaceState({ home: true }, '')
       })
 
-      // Every popstate press is trapped here. We NEVER let it fall through.
       window.addEventListener('popstate', (e) => {
-        if (!browsing) return
-
-        if (stackIndex > 0) {
-          // We have history in OUR stack — go back one step in it
-          stackIndex--
-          expectingFrameLoad = true
-          loadIntoFrame(stack[stackIndex])
-        } else {
-          // stackIndex is 0 — this is the first page of this session — go home
+        if (e.state && e.state.browsing) {
           showHome()
+          history.replaceState({ home: true }, '')
         }
-
-        // Always re-arm a fresh guard so the NEXT back press is trapped too
-        history.pushState({ guard: true, ts: Date.now() }, '')
       })
 
       function toUrl(raw) {
@@ -171,7 +155,7 @@
 
         status.textContent = 'Starting controller…'
         const { ScramjetController } = $scramjetLoadController()
-        sj = new ScramjetController({
+        const sj = new ScramjetController({
           prefix: PREFIX,
           files: {
             wasm: BASE + 'scramjet-engine/scramjet.wasm',
@@ -198,21 +182,13 @@
         const conn = new _0zzl94._ak44v7(BASE + 'bare-mux/bare-mux-worker.js')
         await conn.setTransport(BASE + 'transport/libcurl.mjs', [{ wisp: WISP }])
 
+        history.replaceState({ home: true }, '')
         status.textContent = 'Ready'
 
         function navigate(raw) {
           const url = toUrl(raw)
           if (!url) return
-          if (browsing) {
-            // Navigating from within a session (typed new URL in bar)
-            const encoded = sj.encodeUrl(url)
-            pushUrl(encoded)
-            expectingFrameLoad = true
-            loadIntoFrame(encoded)
-            history.pushState({ guard: true, ts: Date.now() }, '')
-          } else {
-            showBrowser(sj.encodeUrl(url))
-          }
+          showBrowser(sj.encodeUrl(url))
         }
 
         document.getElementById('go-btn').addEventListener('click', () => navigate(bar.value))
