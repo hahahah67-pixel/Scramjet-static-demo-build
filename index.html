@@ -274,6 +274,20 @@
         }, 4000)
       }
 
+      function normalizeWispUrl(raw) {
+        let url = raw.trim()
+        if (!url) return url
+        // Add wss:// if no protocol was typed at all
+        if (!/^wss?:\/\//i.test(url)) {
+          url = 'wss://' + url
+        }
+        // Ensure trailing slash — bare-mux/wisp-js expects the path to end in /
+        if (!url.endsWith('/')) {
+          url += '/'
+        }
+        return url
+      }
+
       async function applyWisp(url, { persist = true } = {}) {
         if (!currentConn) {
           wispSetBtn.textContent = 'Not ready yet…'
@@ -313,7 +327,7 @@
       }
 
       wispSetBtn.addEventListener('click', async () => {
-        const val = wispInput.value.trim()
+        const val = normalizeWispUrl(wispInput.value)
         if (!val) return
         try {
           await applyWisp(val)
