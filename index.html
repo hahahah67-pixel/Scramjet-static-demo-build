@@ -54,54 +54,90 @@
 
       let sj = null
       let browsing = false
-      // Track how many pages deep the iframe has gone so we know
-      // when it has reached the beginning and back should go home
-      let iframeDepth = 0
+
+      // Our OWN in-memory history stack for the iframe — completely
+      // independent of the browser's real history. We never read from
+      // or rely on browser history state beyond "a back button was pressed".
+      let stack = []       // array of encoded URLs
+      let stackIndex = -1  // current position in stack
 
       function showHome() {
         browsing = false
-        iframeDepth = 0
+        stack = []
+        stackIndex = -1
         home.classList.remove('hidden')
         frame.classList.remove('visible')
         try { frame.contentWindow.location.replace('about:blank') } catch {}
         bar.value = ''
       }
 
-      function showBrowser(encodedUrl) {
+      // Load a URL into the iframe WITHOUT touching our stack
+      // (used when we navigate due to back/forward within our own stack)
+      function loadIntoFrame(encodedUrl) {
         frame.src = encodedUrl
+      }
+
+      // User explicitly navigates to a new URL (typed in bar, or clicked home->site)
+      // This TRUNCATES any forward history and pushes a new entry
+      function pushUrl(encodedUrl) {
+        stack = stack.slice(0, stackIndex + 1)
+        stack.push(encodedUrl)
+        stackIndex = stack.length - 1
+      }
+
+      function showBrowser(encodedUrl) {
         home.classList.add('hidden')
         frame.classList.add('visible')
         browsing = true
-        iframeDepth = 1
-        // Single guard entry — back button hits this, we decide what to do
-        history.replaceState({ guard: true }, '')
+        pushUrl(encodedUrl)
+        loadIntoFrame(encodedUrl)
+        // Single fresh guard — we always keep exactly one entry ahead
+        // of wherever the browser's real history currently sits.
+        history.pushState({ guard: true, ts: Date.now() }, '')
       }
 
-      // Each time iframe loads a page, depth increases
+      // Detect in-iframe link clicks (same-tab navigation within the proxy)
+      // by watching load events and comparing the resulting URL against
+      // what we expect from our own stack. If the user clicked a link inside
+      // the site (not us calling loadIntoFrame for back/forward), the new
+      // location differs from stack[stackIndex] — treat it as a new push.
+      let expectingFrameLoad = false
+
       frame.addEventListener('load', () => {
         if (!browsing) return
-        // Don't count about:blank
+        if (expectingFrameLoad) {
+          // This load was triggered by OUR back/forward — don't push
+          expectingFrameLoad = false
+          return
+        }
+        // This load was triggered by the user clicking a link inside the site
         try {
-          if (frame.contentWindow.location.href === 'about:blank') return
-        } catch {}
-        iframeDepth++
-        // Always keep one guard entry so back is intercepted
-        history.replaceState({ guard: true }, '')
+          const currentSrc = frame.contentWindow.location.href
+          if (currentSrc && currentSrc !== 'about:blank' && currentSrc !== stack[stackIndex]) {
+            pushUrl(currentSrc)
+          }
+        } catch {
+          // Cross-origin — can't read href, but scramjet keeps things same-origin
+          // via the prefix so this shouldn't normally happen
+        }
       })
 
+      // Every popstate press is trapped here. We NEVER let it fall through.
       window.addEventListener('popstate', (e) => {
         if (!browsing) return
 
-        if (iframeDepth > 1) {
-          // Iframe has history — go back in it
-          iframeDepth--
-          frame.contentWindow.history.back()
-          // Restore our guard so next back is also intercepted
-          history.pushState({ guard: true }, '')
+        if (stackIndex > 0) {
+          // We have history in OUR stack — go back one step in it
+          stackIndex--
+          expectingFrameLoad = true
+          loadIntoFrame(stack[stackIndex])
         } else {
-          // Iframe is at its first page — go home
+          // stackIndex is 0 — this is the first page of this session — go home
           showHome()
         }
+
+        // Always re-arm a fresh guard so the NEXT back press is trapped too
+        history.pushState({ guard: true, ts: Date.now() }, '')
       })
 
       function toUrl(raw) {
@@ -162,14 +198,21 @@
         const conn = new _0zzl94._ak44v7(BASE + 'bare-mux/bare-mux-worker.js')
         await conn.setTransport(BASE + 'transport/libcurl.mjs', [{ wisp: WISP }])
 
-        // Set initial guard
-        history.replaceState({ guard: true }, '')
         status.textContent = 'Ready'
 
         function navigate(raw) {
           const url = toUrl(raw)
           if (!url) return
-          showBrowser(sj.encodeUrl(url))
+          if (browsing) {
+            // Navigating from within a session (typed new URL in bar)
+            const encoded = sj.encodeUrl(url)
+            pushUrl(encoded)
+            expectingFrameLoad = true
+            loadIntoFrame(encoded)
+            history.pushState({ guard: true, ts: Date.now() }, '')
+          } else {
+            showBrowser(sj.encodeUrl(url))
+          }
         }
 
         document.getElementById('go-btn').addEventListener('click', () => navigate(bar.value))
@@ -182,5 +225,4 @@
       }
     </script>
   </body>
-  </html>
-          
+</html>
